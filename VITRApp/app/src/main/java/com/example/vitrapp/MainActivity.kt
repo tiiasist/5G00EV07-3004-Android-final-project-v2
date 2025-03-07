@@ -94,6 +94,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.Manifest
 import android.content.Context
+import android.media.ExifInterface
 import android.provider.MediaStore
 import android.util.Log
 
@@ -117,10 +118,14 @@ import androidx.core.content.FileProvider
 
 import androidx.lifecycle.LifecycleOwner
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-const val BASE_URL = "https://api.porssisahko.net/"
+const val BASE_URL = "https://www.euromelanoma.eu/"
+//const val EUROMELANOMA_LOCATION = "en-intl/learn-about-skin-cancer/benign-lesion"
 const val LATEST_PRICES_ENDPOINT = "v1/latest-prices.json"
 const val API_MAIN_PAGE_URL = "https://www.porssisahko.net/api"
 
@@ -947,9 +952,13 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
     }
 }
 
-// Third page for camera
+// Third page for mole check picture
 @Composable
 fun Page3() {
+    val BASE_URL_EURO = "https://www.euromelanoma.eu/"
+    val EUROMELANOMA_LOCATION =
+        stringResource(R.string.en_intl_learn_about_skin_cancer_benign_lesion)
+
     var errorMessage by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -963,13 +972,15 @@ fun Page3() {
             ) == PackageManager.PERMISSION_GRANTED
         )
     }
-
+    var imageUriTemp by remember { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
-            imageUri?.let { uri ->
+            imageUriTemp?.let { uri ->
+                imageUri = uri
                 sharedPreferences.edit().putString("image_uri", uri.toString()).apply()
+                /*
                 // Reload image after taking picture
                 loadImage(uri, context, onBitmapLoaded = { loadedBitmap ->
                     bitmap = loadedBitmap
@@ -977,11 +988,11 @@ fun Page3() {
                 }, onError = { error ->
                     errorMessage = error
                     bitmap = null
-                })
+                })*/
             }
-        } else {
-            imageUri = null // Reset the imageUri state if the picture was not taken
         }
+          imageUriTemp = null // Reset the imageUri state
+
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -995,35 +1006,18 @@ fun Page3() {
         if (!cameraPermissionGranted.value) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
-        // Only load the image if imageUri is null
-        if (imageUri == null) {
-            val savedUri = sharedPreferences.getString("image_uri", null)
-            if (savedUri != null) {
-                imageUri = Uri.parse(savedUri)
-                // Reload image from sharedPreferences
-                loadImage(imageUri, context, onBitmapLoaded = { loadedBitmap ->
-                    bitmap = loadedBitmap
-                    errorMessage = ""
-                }, onError = { error ->
-                    errorMessage = error
-                    bitmap = null
-                })
-            }
+        val savedUri = sharedPreferences.getString("image_uri", null)
+        if (savedUri != null) {
+            imageUri = Uri.parse(savedUri)
+            // Reload image from sharedPreferences
         }
     }
+
 
     // Save imageUri to SharedPreferences when updated
     LaunchedEffect(imageUri) {
         imageUri?.let { uri ->
             sharedPreferences.edit().putString("image_uri", uri.toString()).apply()
-            // Reload image when imageUri changes
-            loadImage(uri, context, onBitmapLoaded = { loadedBitmap ->
-                bitmap = loadedBitmap
-                errorMessage = ""
-            }, onError = { error ->
-                errorMessage = error
-                bitmap = null
-            })
         }
     }
 
@@ -1033,28 +1027,44 @@ fun Page3() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item {
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = {
-                // Create photo file
-                val photoFile = File(context.filesDir, "photo.jpg")
 
-                val photoUri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.provider",
-                    photoFile
-                )
-                imageUri = photoUri
-                cameraLauncher.launch(photoUri)
-            }) {
-                Text("Take Picture")
+            Spacer(modifier = Modifier.height(16.dp))
+
+            fun getImageDateTakenFromExif(context: Context, uri: Uri): String? {
+                return try {
+                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        val exif = ExifInterface(inputStream)
+                        val dateTime = exif.getAttribute(ExifInterface.TAG_DATETIME)
+
+                        dateTime?.let {
+                            // Alkuperäinen EXIF-muoto: yyyy:MM:dd HH:mm:ss
+                            val inputFormat = SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.getDefault())
+                            val date = inputFormat.parse(it)
+
+                            // Muunnetaan muotoon dd.MM.yyyy
+                            val outputFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+                            return date?.let { outputFormat.format(it) } ?: "No photo taken"
+                        } ?: context.getString(R.string.no_photo_taken)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    "Unknown date"
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Display image if bitmap is available
-            bitmap?.let {
+            imageUri?.let {uri ->
+                val bitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+
+                val formattedDate = getImageDateTakenFromExif(context, uri)
+                val safeFormattedDate = formattedDate ?: "N/A"
+                Text(
+                    text = stringResource(R.string.photo_taken, safeFormattedDate),
+                    modifier = Modifier.padding(8.dp)
+                )
                 Image(
-                    bitmap = it,
+                    bitmap = bitmap.asImageBitmap(),
                     contentDescription = null,
                     modifier = Modifier.size(200.dp)
                 )
@@ -1067,36 +1077,54 @@ fun Page3() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            Button(onClick = {
+                imageUri = null // Reset the imageUri state
+                // Create photo file
+                val pictureFile = File(context.filesDir, "picture.jpg")
+                val pictureUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider",
+                    pictureFile
+                )
+                imageUriTemp = pictureUri
+                cameraLauncher.launch(pictureUri)
+            }) {
+                Text(stringResource(R.string.take_picture))
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+
             // Button to delete the picture
             Button(onClick = {
                 imageUri = null
-                bitmap = null
                 sharedPreferences.edit().remove("image_uri").apply()
 
-
             }) {
-                Text("Delete Picture")
+                Text(stringResource(R.string.delete_picture))
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    val intentBrowserDataJSON = Intent(Intent.ACTION_VIEW, Uri.parse(BASE_URL_EURO + EUROMELANOMA_LOCATION))
+                    context.startActivity(intentBrowserDataJSON)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            ) {
+                Text(text = stringResource(R.string.about_benign_lesions))
+            }
+
+
         }
+
     }
 }
 
-// Helper function to load image asynchronously
-fun loadImage(
-    uri: Uri?,
-    context: Context,
-    onBitmapLoaded: (ImageBitmap) -> Unit,
-    onError: (String) -> Unit
-) {
-    uri?.let {
-        try {
-            val bitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, it)
-            onBitmapLoaded(bitmap.asImageBitmap())  // Pass loaded bitmap
-        } catch (e: Exception) {
-            onError("Error loading image: ${e.message}")  // Pass error message
-        }
-    }
-}
 
 
 

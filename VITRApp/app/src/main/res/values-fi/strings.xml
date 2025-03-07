@@ -45,4 +45,10 @@
     <string name="textfield_label_name_2">Nimi</string>
     <string name="save_button">Tallenna</string>
     <string name="title_user_page">Käyttäjä</string>
+    <string name="en_intl_learn_about_skin_cancer_benign_lesion">fi-fi/tunnista-ihosyopa/hyvanlaatuiset-ihomuutokset</string>
+    <string name="about_benign_lesions">Tutustu hyvänlaatuisiin ihomuutoksiin</string>
+    <string name="delete_picture">Poista valokuva</string>
+    <string name="take_picture">Ota valokuva</string>
+    <string name="no_photo_taken">Ei kuvaa</string>
+    <string name="photo_taken">Kuva otettu: %s</string>
 </resources>

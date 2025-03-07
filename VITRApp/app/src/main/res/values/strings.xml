@@ -44,4 +44,10 @@
     <string name="textfield_label_name_2">Name</string>
     <string name="save_button">Save</string>
     <string name="title_user_page">User</string>
+    <string name="en_intl_learn_about_skin_cancer_benign_lesion">en-intl/learn-about-skin-cancer/benign-lesion</string>
+    <string name="about_benign_lesions">About benign lesions</string>
+    <string name="delete_picture">Delete Picture</string>
+    <string name="take_picture">Take Picture</string>
+    <string name="no_photo_taken">No photo taken</string>
+    <string name="photo_taken">Photo taken: %s</string>
 </resources>

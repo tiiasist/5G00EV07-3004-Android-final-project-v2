@@ -117,6 +117,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 
 import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -755,36 +756,81 @@ fun BarChart(prices: List<Price>) {
     }
 }
 
-// Second page for calculation of electricity bill
+// Second page
 class Page2ViewModel : ViewModel() {
-    var consumption by mutableStateOf("")
-    var fixedPrice by mutableStateOf("")
-    var yearlyCost by mutableStateOf<Double?>(null)
-    var monthlyCost by mutableStateOf<Double?>(null)
-    var roundedYearlyCost by mutableStateOf("")
-    var roundedMonthlyCost by mutableStateOf("")
-    var averageYearlyCost by mutableStateOf<Double?>(null)
-    var averageMonthlyCost by mutableStateOf<Double?>(null)
-    var roundedAverageYearlyCost by mutableStateOf("")
-    var roundedAverageMonthlyCost by mutableStateOf("")
-    var prices: List<Price> by mutableStateOf(emptyList())
-    var loading by mutableStateOf(true)
-    var error by mutableStateOf<String?>(null)
+    var systolicPressure by mutableStateOf("")
+    var diastolicPressure by mutableStateOf("")
 
-    init {
-        fetchPrices()
+    var statusMessage by mutableStateOf<String?>(null)
+
+    var savedSystolic by mutableStateOf("")
+    var savedDiastolic by mutableStateOf("")
+    var savedTimestamp by mutableStateOf<Long?>(null)
+    var formattedTimestamp by mutableStateOf("")
+
+    // Load saved values
+    fun loadSavedValues(sharedPreferences: SharedPreferences) {
+        systolicPressure = sharedPreferences.getString("systolic_pressure", "") ?: ""
+        diastolicPressure = sharedPreferences.getString("diastolic_pressure", "") ?: ""
+        savedTimestamp = sharedPreferences.getLong("timestamp", 0)
+
+        savedSystolic = systolicPressure
+        savedDiastolic = diastolicPressure
+
+        if (savedTimestamp != null && savedTimestamp != 0L) {
+            val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+            formattedTimestamp = sdf.format(Date(savedTimestamp!!))
+        }
+    }
+    // Save values
+    fun saveValues(sharedPreferences: SharedPreferences): Boolean {
+        // Basic validation
+        val systolic = systolicPressure.toIntOrNull()
+        val diastolic = diastolicPressure.toIntOrNull()
+
+        return if (systolic != null && diastolic != null && systolic > 0 && diastolic > 0) {
+            val currentTime = System.currentTimeMillis()  // Define the variable here
+            sharedPreferences.edit()
+                .putString("systolic_pressure", systolicPressure)
+                .putString("diastolic_pressure", diastolicPressure)
+                .putLong("timestamp", currentTime)
+                .apply()
+
+            // Update saved values
+            savedSystolic = systolicPressure
+            savedDiastolic = diastolicPressure
+            savedTimestamp = currentTime  // Now using the defined variable
+
+            val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+            formattedTimestamp = sdf.format(Date(currentTime))  // Using the defined variable
+            true
+        } else {
+            false
+        }
     }
 
-    private fun fetchPrices() {
-        viewModelScope.launch {
-            try {
-                val response = RetrofitInstance.api.getPrices()
-                prices = response.prices
-                loading = false
-            } catch (e: Exception) {
-                error = e.message
-                loading = false
-            }
+    fun deleteSavedValues(sharedPreferences: SharedPreferences) {
+        sharedPreferences.edit()
+            .remove("systolic_pressure")
+            .remove("diastolic_pressure")
+            .remove("timestamp")
+            .apply()
+
+        savedSystolic = ""
+        savedDiastolic = ""
+        savedTimestamp = null
+        formattedTimestamp = ""
+    }
+
+    fun getBloodPressureStatus(): String {
+        val systolic = savedSystolic.toIntOrNull() ?: 0
+        val diastolic = savedDiastolic.toIntOrNull() ?: 0
+        return  when {
+            systolic < 100 && diastolic < 60 -> "LOW"
+            systolic in 100..129 && diastolic in 60..84 -> "NORMAL"
+            systolic >130 && diastolic > 85 -> "HIGH"
+            else -> "UNKNOWN"
+
         }
     }
 }
@@ -792,8 +838,147 @@ class Page2ViewModel : ViewModel() {
 @SuppressLint("DefaultLocale")
 @Composable
 fun Page2( viewModel: Page2ViewModel = viewModel()) {
+    val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val sharedPreferences = context.getSharedPreferences("BloodPressureData", Context.MODE_PRIVATE)
+    var showSaveMessage by remember { mutableStateOf(false) }
+    var isSaveSuccessful by remember { mutableStateOf(false) }
 
+    // Load saved values when the screen is first composed
+    LaunchedEffect(Unit) {
+        viewModel.loadSavedValues(sharedPreferences)
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        item {
+
+            // Input fields
+            OutlinedTextField(
+                value = viewModel.systolicPressure,
+                onValueChange = { viewModel.systolicPressure = it },
+                label = { Text("Yläpaine") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { keyboardController?.hide() }
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = viewModel.diastolicPressure,
+                onValueChange = { viewModel.diastolicPressure = it },
+                label = { Text("Alapaine") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { keyboardController?.hide() }
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    keyboardController?.hide()
+                    isSaveSuccessful = viewModel.saveValues(sharedPreferences)
+                    showSaveMessage = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = "Save")
+            }
+
+            if (showSaveMessage) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = if (isSaveSuccessful)
+                        "Blood pressure values saved"
+                    else
+                        "Invalid input values",
+                    color = if (isSaveSuccessful)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                // Hide the message after a delay
+                LaunchedEffect(showSaveMessage) {
+                    delay(3000)
+                    showSaveMessage = false
+                }
+            }
+            // Display saved values if they exist
+            // Display saved values if they exist
+            if (viewModel.savedTimestamp != null && viewModel.savedTimestamp != 0L) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            when (viewModel.getBloodPressureStatus()) {
+                                "LOW" -> Color.Blue.copy(alpha = 0.2f)
+                                "NORMAL" -> Color.Green.copy(alpha = 0.2f)
+                                "HIGH" -> Color.Red.copy(alpha = 0.2f)
+                                else -> MaterialTheme.colorScheme.primaryContainer
+                            }
+                        )
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Last Saved Values",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "Yläpaine: ${viewModel.savedSystolic}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Alapaine: ${viewModel.savedDiastolic}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Saved on: ${viewModel.formattedTimestamp}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            viewModel.deleteSavedValues(sharedPreferences)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Delete Saved Values")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+    /*
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -949,7 +1134,7 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
                 }
             }
         }
-    }
+    }*/
 }
 
 // Third page for mole check picture

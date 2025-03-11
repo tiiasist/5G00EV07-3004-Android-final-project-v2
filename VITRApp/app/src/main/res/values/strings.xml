@@ -50,4 +50,10 @@
     <string name="take_picture">Take Picture</string>
     <string name="no_photo_taken">No photo taken</string>
     <string name="photo_taken">Photo taken: %s</string>
+    <string name="systolic_blood_pressure">Systolic blood pressure</string>
+    <string name="diastolic_blood_pressure">Diastolic blood pressure</string>
+    <string name="blood_pressure_values_saved">Blood pressure values saved</string>
+    <string name="save">Save</string>
+    <string name="invalid_input_values2">Invalid input values</string>
+    <string name="delete_saved_values">Delete Saved Values</string>
 </resources>

@@ -56,134 +56,43 @@ import androidx.compose.ui.draw.clip
 import kotlinx.coroutines.launch
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
-import com.example.vitrapp.ui.theme.errorContainerLight
-import com.example.vitrapp.ui.theme.primaryContainerLight
-import com.example.vitrapp.ui.theme.secondaryLight
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.Camera
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.ui.unit.times
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.Manifest
 import android.content.Context
 import android.media.ExifInterface
 import android.provider.MediaStore
-import android.util.Log
 
 import androidx.core.content.ContextCompat
 
 
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
-
-import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-
-const val BASE_URL = "https://www.euromelanoma.eu/"
-//const val EUROMELANOMA_LOCATION = "en-intl/learn-about-skin-cancer/benign-lesion"
-const val LATEST_PRICES_ENDPOINT = "v1/latest-prices.json"
-const val API_MAIN_PAGE_URL = "https://www.porssisahko.net/api"
-
-
-val dummyPrices = listOf(
-    Price(5.874, "2024-12-13T07:00:00.000Z", "2024-12-13T08:00:00.000Z"),
-    Price(9.457, "2024-12-13T06:00:00.000Z", "2024-12-13T07:00:00.000Z"),
-    Price(0.2, "2024-12-13T05:00:00.000Z", "2024-12-13T06:00:00.000Z"),
-    Price(10.899, "2024-12-13T04:00:00.000Z", "2024-12-13T05:00:00.000Z"),
-    Price(3.172, "2024-12-13T03:00:00.000Z", "2024-12-13T04:00:00.000Z"),
-    Price(11.0, "2024-12-13T02:00:00.000Z", "2024-12-13T03:00:00.000Z"),
-    Price(0.2, "2024-12-13T01:00:00.000Z", "2024-12-13T02:00:00.000Z"),
-    Price(9.113, "2024-12-13T00:00:00.000Z", "2024-12-13T01:00:00.000Z"),
-    Price(3.533, "2024-12-12T23:00:00.000Z", "2024-12-13T00:00:00.000Z"),
-    Price(3.533, "2024-12-12T22:00:00.000Z", "2024-12-12T23:00:00.000Z"),
-    Price(-26.333, "2024-12-12T21:00:00.000Z", "2024-12-12T22:00:00.000Z"),
-    Price(0.0, "2024-12-12T20:00:00.000Z", "2024-12-12T21:00:00.000Z"),
-    Price(8.757, "2024-12-12T19:00:00.000Z", "2024-12-12T20:00:00.000Z"),
-    Price(-10.58, "2024-12-12T18:00:00.000Z", "2024-12-12T19:00:00.000Z"),
-    Price(14.761, "2024-12-12T17:00:00.000Z", "2024-12-12T18:00:00.000Z"),
-    Price(0.0, "2024-12-12T16:00:00.000Z", "2024-12-12T17:00:00.000Z"),
-    Price(25.104, "2024-12-12T15:00:00.000Z", "2024-12-12T16:00:00.000Z"),
-    Price(-128.118, "2024-12-12T14:00:00.000Z", "2024-12-12T15:00:00.000Z"),
-    Price(20.541, "2024-12-12T13:00:00.000Z", "2024-12-12T14:00:00.000Z"),
-    Price(14.761, "2024-12-12T12:00:00.000Z", "2024-12-12T13:00:00.000Z"),
-    Price(0.0, "2024-12-12T11:00:00.000Z", "2024-12-12T12:00:00.000Z"),
-    Price(25.104, "2024-12-12T10:00:00.000Z", "2024-12-12T11:00:00.000Z"),
-    Price(-28.118, "2024-12-12T09:00:00.000Z", "2024-12-12T10:00:00.000Z"),
-    Price(20.541, "2024-12-12T08:00:00.000Z", "2024-12-12T09:00:00.000Z")
-)
-
-val dummyPrices2 = listOf(
-    Price(3.85, "2024-12-13T07:00:00.000Z", "2024-12-13T08:00:00.000Z"),
-    Price(4.72, "2024-12-13T06:00:00.000Z", "2024-12-13T07:00:00.000Z"),
-    Price(3.45, "2024-12-13T05:00:00.000Z", "2024-12-13T06:00:00.000Z"),
-    Price(5.03, "2024-12-13T04:00:00.000Z", "2024-12-13T05:00:00.000Z"),
-    Price(3.62, "2024-12-13T03:00:00.000Z", "2024-12-13T04:00:00.000Z"),
-    Price(5.2, "2024-12-13T02:00:00.000Z", "2024-12-13T03:00:00.000Z"),
-    Price(3.45, "2024-12-13T01:00:00.000Z", "2024-12-13T02:00:00.000Z"),
-    Price(4.64, "2024-12-13T00:00:00.000Z", "2024-12-13T01:00:00.000Z"),
-    Price(3.85, "2024-12-12T23:00:00.000Z", "2024-12-13T00:00:00.000Z"),
-    Price(3.85, "2024-12-12T22:00:00.000Z", "2024-12-12T23:00:00.000Z"),
-    Price(3.45, "2024-12-12T21:00:00.000Z", "2024-12-12T22:00:00.000Z"),
-    Price(3.45, "2024-12-12T20:00:00.000Z", "2024-12-12T21:00:00.000Z"),
-    Price(4.38, "2024-12-12T19:00:00.000Z", "2024-12-12T20:00:00.000Z"),
-    Price(3.45, "2024-12-12T18:00:00.000Z", "2024-12-12T19:00:00.000Z"),
-    Price(4.92, "2024-12-12T17:00:00.000Z", "2024-12-12T18:00:00.000Z"),
-    Price(3.45, "2024-12-12T16:00:00.000Z", "2024-12-12T17:00:00.000Z"),
-    Price(5.08, "2024-12-12T15:00:00.000Z", "2024-12-12T16:00:00.000Z"),
-    Price(3.45, "2024-12-12T14:00:00.000Z", "2024-12-12T15:00:00.000Z"),
-    Price(4.85, "2024-12-12T13:00:00.000Z", "2024-12-12T14:00:00.000Z"),
-    Price(4.92, "2024-12-12T12:00:00.000Z", "2024-12-12T13:00:00.000Z"),
-    Price(3.45, "2024-12-12T11:00:00.000Z", "2024-12-12T12:00:00.000Z"),
-    Price(5.08, "2024-12-12T10:00:00.000Z", "2024-12-12T11:00:00.000Z"),
-    Price(3.45, "2024-12-12T09:00:00.000Z", "2024-12-12T10:00:00.000Z"),
-    Price(4.85, "2024-12-12T08:00:00.000Z", "2024-12-12T09:00:00.000Z")
-)
 
 class MainActivity : ComponentActivity() {
     private lateinit var sharedPreferences: SharedPreferences
@@ -210,7 +119,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 
 @Composable
 fun VITRApp(sharedPreferences: SharedPreferences, userName: String, onUserNameChange: (String) -> Unit) {
@@ -402,359 +310,95 @@ fun BottomNavigationBar(navController: NavHostController) {
     }
 }
 
+
+class Page1ViewModel : ViewModel() {
+    data class QuoteResponse(
+        val id: Int,
+        val q: String,  // Changed from "quote" to "q" to match API response
+        val a: String,  // Changed from "author" to "a" to match API response
+    )
+
+    interface ApiService {
+        @GET("api/random")
+        suspend fun getDataList(): List<QuoteResponse>
+    }
+
+    object RetrofitClient {
+        private const val BASE_URL = "https://zenquotes.io/"
+
+        val apiService: ApiService by lazy {
+            Retrofit.Builder()
+                .baseUrl(BASE_URL)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+                .create(ApiService::class.java)
+        }
+    }
+}
+
 // First page for home screen
 @SuppressLint("DefaultLocale")
 @Composable
-fun Page1() {
-
-    var prices: List<Price> by remember { mutableStateOf(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+fun Page1(viewModel: Page1ViewModel = viewModel()) {
+    var data by remember { mutableStateOf<List<Page1ViewModel.QuoteResponse>?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        coroutineScope.launch {
-            try {
-                val response = RetrofitInstance.api.getPrices()
-                prices = response.prices
-                //prices = dummyPrices
-                loading = false
-            } catch (e: Exception) {
-                error = e.message
-                loading = false
-            }
+    LaunchedEffect(true) {
+        try {
+            data = Page1ViewModel.RetrofitClient.apiService.getDataList()
+            isLoading = false
+        } catch (e: Exception) {
+            error = e.message
+            isLoading = false
         }
     }
 
-    if (loading) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = stringResource(R.string.loading_price_data_text))
+    if (isLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Loading quotes...")
         }
-    } else if (error != null) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = "Error: $error")
+    }
+    // Display error if any
+    else if (error != null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Error: $error", color = Color.Red)
+            Text("No quotes available")
         }
-    } else {
-
+    }
+    // Display data if available
+    else if (data != null && data!!.isNotEmpty()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.Top,
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            item{
+            items(data!!) { quote ->
                 Text(
-                    text = stringResource(R.string.cents_kwh_prices),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)
+                    text = "\"${quote.q}\"",  // Changed to match API response field
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(8.dp)
+                )
+                Text(
+                    text = "— ${quote.a}",  // Changed to match API response field
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 24.dp)
                 )
             }
-            item{
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            item{
-                BarChart(prices = prices)
-            }
-            item{
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                    horizontalArrangement = Arrangement.spacedBy(1.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.date_title_price_column),
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .fillMaxWidth(),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.time_title_price_column),
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .fillMaxWidth(),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.cents_kwh_title_price_column),
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .fillMaxWidth(),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
-            }
-
-
-            items(prices) { price ->
-                val zonedDateTime = ZonedDateTime.parse(price.startDate)
-                val date = zonedDateTime.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-                val time = zonedDateTime.format(DateTimeFormatter.ofPattern("HH.mm"))
-                val priceInCents = String.format("%.2f", price.price)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, top = 2.dp, end = 4.dp, bottom = 2.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                    horizontalArrangement = Arrangement.spacedBy(1.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Text(
-                            text = date,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .fillMaxWidth(),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Text(
-                            text = time,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .fillMaxWidth(),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Text(
-                            text = priceInCents,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .fillMaxWidth(),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
+        }
+    }
+    // Display empty state
+    else {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No quotes available")
         }
     }
 }
 
-
-data class Price(
-    val price: Double,
-    val startDate: String,
-    val endDate: String
-)
-
-data class PriceResponse(
-    val prices: List<Price>
-)
-
-interface ApiService {
-    @GET(LATEST_PRICES_ENDPOINT)
-    suspend fun getPrices(): PriceResponse
-}
-
-object RetrofitInstance {
-    val api: ApiService by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(ApiService::class.java)
-    }
-}
-
-@SuppressLint("DefaultLocale")
-@Composable
-fun BarChart(prices: List<Price>) {
-    val currentTime = ZonedDateTime.now()
-    val startTime = currentTime.minusHours(4)
-    val endTime = startTime.plusHours(12)
-    val filteredPrices = prices.filter {
-        val priceTime = ZonedDateTime.parse(it.startDate)
-        priceTime.isAfter(startTime) && priceTime.isBefore(endTime)
-    }.sortedBy { ZonedDateTime.parse(it.startDate) }
-    val maxPrice = filteredPrices.maxOfOrNull { it.price } ?: 0.0
-    val minPrice = filteredPrices.minOfOrNull { it.price } ?: 0.0
-    var selectedPrice by remember { mutableStateOf<Triple<Double, String, String>?>(null) }
-    val currentTimeFormatted = currentTime.format(DateTimeFormatter.ofPattern("HH:mm dd.MM.yyyy"))
-    val currentPrice = filteredPrices.find { ZonedDateTime.parse(it.startDate).hour == currentTime.hour }?.price ?: 0.0
-
-    // Calculate the maximum bar height based on the maximum price
-    val maxBarHeight = (maxPrice - minPrice).toFloat() * 10.dp
-
-    Canvas(modifier = Modifier
-        .padding(start = 40.dp, top = 16.dp, end = 16.dp, bottom = 32.dp)
-        .fillMaxWidth()
-        .height(maxBarHeight)
-        .pointerInput(Unit) {
-            detectTapGestures { offset ->
-                val gap = 4.dp.toPx()
-                val barWidth = (size.width - gap * (filteredPrices.size - 1)) / filteredPrices.size
-                val index = (offset.x / (barWidth + gap)).toInt()
-                if (index in filteredPrices.indices) {
-                    val price = filteredPrices[index]
-                    val dateTime = ZonedDateTime.parse(price.startDate)
-                    val time = dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-                    val date = dateTime.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-                    selectedPrice = Triple(price.price, time, date)
-                }
-            }
-        }
-    ) {
-        val gap = 8.dp.toPx()
-        val barWidth = (size.width - gap * (filteredPrices.size - 1)) / filteredPrices.size
-        val yAxisInterval = (maxPrice) / 5
-        val cornerRadius = 3.dp.toPx()
-        val zeroLine = size.height * (maxPrice / (maxPrice - minPrice)).toFloat()
-
-        // Draw the bars first
-        filteredPrices.forEachIndexed { index, price ->
-            val barHeight = ((price.price / (maxPrice - minPrice)) * size.height).toFloat()
-            val xOffset = index * (barWidth + gap)
-            var barColor = when {
-                price.price < 7 -> errorContainerLight
-                price.price < 14 -> primaryContainerLight
-                else -> secondaryLight
-            }
-
-            // Change the color opacity if the bar corresponds to the current time
-            val priceTime = ZonedDateTime.parse(price.startDate)
-            if (priceTime.hour == currentTime.hour) {
-                barColor = barColor.copy(alpha = 0.6f)
-            }
-
-            // Draw the filled bar with rounded corners
-            drawRoundRect(
-                color = barColor,
-                topLeft = androidx.compose.ui.geometry.Offset(xOffset, zeroLine - barHeight),
-                size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius)
-            )
-
-            // Draw a thin border with rounded corners if the bar corresponds to the current time
-            if (priceTime.hour == currentTime.hour) {
-                drawRoundRect(
-                    color = Color.Black,
-                    topLeft = androidx.compose.ui.geometry.Offset(xOffset, zeroLine - barHeight),
-                    size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                )
-            }
-
-            // Draw x-axis labels centered to the bars
-            drawContext.canvas.nativeCanvas.drawText(
-                ZonedDateTime.parse(price.startDate).format(DateTimeFormatter.ofPattern("HH")),
-                xOffset + barWidth / 2,
-                size.height + 12.sp.toPx(),
-                android.graphics.Paint().apply {
-                    color = android.graphics.Color.BLACK
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    textSize = 12.sp.toPx()
-                }
-            )
-        }
-
-        // Draw y-axis help lines and labels centered to the lines
-        for (i in 0..5) {
-            val y = size.height - ((i * yAxisInterval - minPrice) / (maxPrice - minPrice) * size.height).toFloat()
-            drawLine(
-                color = Color.Gray,
-                start = androidx.compose.ui.geometry.Offset(0f, y),
-                end = androidx.compose.ui.geometry.Offset(size.width, y),
-                strokeWidth = 1.dp.toPx()
-            )
-            val label = when {
-                0 + i * yAxisInterval == 0.0 -> "0"
-                maxPrice >= 10 -> String.format("%.0f", 0 + i * yAxisInterval)
-                else -> String.format("%.1f", 0 + i * yAxisInterval)
-            }
-
-            drawContext.canvas.nativeCanvas.drawText(
-                label,
-                -90f,
-                y + 6.sp.toPx(), // Adjusted to center the label to the line
-                android.graphics.Paint().apply {
-                    color = android.graphics.Color.BLACK
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    textSize = 12.sp.toPx()
-                }
-            )
-        }
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    Box(
-        modifier = Modifier
-            .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-        ,
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = selectedPrice?.let { (price, time, date) ->
-                stringResource(R.string.selected_spot_cents_kwh, time, date, price)
-            } ?: stringResource(R.string.current_spot_cents_kwh, currentTimeFormatted, currentPrice),
-            modifier = Modifier
-                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp),
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center
-        )
-    }
-}
 
 // Second page
 class Page2ViewModel : ViewModel() {
@@ -862,7 +506,7 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
             OutlinedTextField(
                 value = viewModel.systolicPressure,
                 onValueChange = { viewModel.systolicPressure = it },
-                label = { Text("Yläpaine") },
+                label = { Text(stringResource(R.string.systolic_blood_pressure)) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Done
@@ -878,7 +522,7 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
             OutlinedTextField(
                 value = viewModel.diastolicPressure,
                 onValueChange = { viewModel.diastolicPressure = it },
-                label = { Text("Alapaine") },
+                label = { Text(stringResource(R.string.diastolic_blood_pressure)) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Done
@@ -899,16 +543,16 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(text = "Save")
+                Text(text = stringResource(R.string.save))
             }
 
             if (showSaveMessage) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = if (isSaveSuccessful)
-                        "Blood pressure values saved"
+                        stringResource(R.string.blood_pressure_values_saved)
                     else
-                        "Invalid input values",
+                        stringResource(R.string.invalid_input_values2),
                     color = if (isSaveSuccessful)
                         MaterialTheme.colorScheme.primary
                     else
@@ -947,11 +591,11 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     Text(
-                        text = "Yläpaine: ${viewModel.savedSystolic}",
+                        text = "Systoli blood pressure: ${viewModel.savedSystolic}",
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "Alapaine: ${viewModel.savedDiastolic}",
+                        text = "Diastolic blood pressure: ${viewModel.savedDiastolic}",
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
@@ -970,7 +614,7 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
                             containerColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text("Delete Saved Values")
+                        Text(stringResource(R.string.delete_saved_values))
                     }
                 }
 

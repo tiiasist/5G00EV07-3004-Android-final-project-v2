@@ -53,9 +53,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.clip
-import kotlinx.coroutines.launch
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ButtonDefaults
@@ -76,18 +73,25 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.Manifest
 import android.content.Context
-import android.media.ExifInterface
+import androidx.exifinterface.media.ExifInterface
 import android.provider.MediaStore
-
 import androidx.core.content.ContextCompat
-
-
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.FileProvider
+import com.example.vitrapp.ui.theme.deleteReadingButton
+import com.example.vitrapp.ui.theme.highBloodPressureState
+import com.example.vitrapp.ui.theme.lowBloodPressureState
+import com.example.vitrapp.ui.theme.normalBloodPressureState
+import com.example.vitrapp.ui.theme.unknownBloodPressureState
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
@@ -123,6 +127,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun VITRApp(sharedPreferences: SharedPreferences, userName: String, onUserNameChange: (String) -> Unit) {
     val navController = rememberNavController()
+    val bloodPressureViewModel = viewModel<Page2ViewModel>()
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    // Reload values when navigating to page1
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == "page1") {
+            bloodPressureViewModel.loadSavedValues(sharedPreferences)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -138,12 +153,12 @@ fun VITRApp(sharedPreferences: SharedPreferences, userName: String, onUserNameCh
                 modifier = Modifier.padding(innerPadding) // Apply the innerPadding here
             ) {
                 composable("page1") {// Home
-                    Page1()
+                    Page1(bloodPressureViewModel)
                 }
-                composable("page2") {// Calculator
-                    Page2()
+                composable("page2") {// Blood Pressure Values
+                    Page2(bloodPressureViewModel)
                 }
-                composable("page3") {// Data
+                composable("page3") {// Skin camera
                     Page3()
                 }
                 composable("page4") {// User
@@ -339,10 +354,15 @@ class Page1ViewModel : ViewModel() {
 // First page for home screen
 @SuppressLint("DefaultLocale")
 @Composable
-fun Page1(viewModel: Page1ViewModel = viewModel()) {
+fun Page1(viewModel: Page2ViewModel, quoteViewModel: Page1ViewModel = viewModel()) {
     var data by remember { mutableStateOf<List<Page1ViewModel.QuoteResponse>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    // Force recomposition when the savedSystolic or savedDiastolic values change
+    val bpValues by remember(viewModel.savedSystolic, viewModel.savedDiastolic) {
+        mutableStateOf("${viewModel.savedSystolic}/${viewModel.savedDiastolic}")
+    }
 
     LaunchedEffect(true) {
         try {
@@ -354,47 +374,162 @@ fun Page1(viewModel: Page1ViewModel = viewModel()) {
         }
     }
 
-    if (isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Loading quotes...")
-        }
-    }
-    // Display error if any
-    else if (error != null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Error: $error", color = Color.Red)
-            Text("No quotes available")
-        }
-    }
-    // Display data if available
-    else if (data != null && data!!.isNotEmpty()) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            items(data!!) { quote ->
-                Text(
-                    text = "\"${quote.q}\"",  // Changed to match API response field
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(8.dp)
-                )
-                Text(
-                    text = "— ${quote.a}",  // Changed to match API response field
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 24.dp)
-                )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+        // Quote section
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text("Loading quotes...")
             }
         }
-    }
-    // Display empty state
-    else {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No quotes available")
+        else if (error != null) {
+            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                //Text("Error: $error", color = Color.Red)
+                Text("No quotes available")
+            }
+        }
+        else if (data != null && data!!.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                    .padding(16.dp)
+            ) {
+                // Display first quote from the list
+                data!!.firstOrNull()?.let { quote ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "\"${quote.q}\"",
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                        Text(
+                            text = "— ${quote.a}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                }
+            }
+        }
+        else {
+            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text("No quotes available")
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        // Average Blood Pressure Section
+        Text(
+            text = " Recent Blood Pressure Average",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        // Blood pressure status
+        if (viewModel.readingsList.isNotEmpty()) {
+            val (avgSystolic, avgDiastolic) = viewModel.getAverageBloodPressure()
+            val status = viewModel.getAverageBloodPressureStatus()
+            val statusText = when(status) {
+                "LOW" -> "Low Blood Pressure"
+                "NORMAL" -> "Normal Blood Pressure"
+                "HIGH" -> "High Blood Pressure"
+                else -> "Unknown Status"
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        when (status) {
+                            "LOW" -> lowBloodPressureState.copy(alpha = 0.2f)
+                            "NORMAL" -> normalBloodPressureState.copy(alpha = 0.2f)
+                            "HIGH" -> highBloodPressureState.copy(alpha = 0.2f)
+                            else -> unknownBloodPressureState.copy(alpha = 0.2f)
+                        }
+                    )
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    Text(
+                        text = "$avgSystolic/$avgDiastolic mmHg (Average)",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Based on ${viewModel.readingsList.size} previous readings",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                }
+            }
+        } else if (viewModel.savedSystolic.isNotEmpty() && viewModel.savedDiastolic.isNotEmpty()) {
+            // Show latest reading if no history available
+            val status = viewModel.getBloodPressureStatus()
+            val statusText = when (status) {
+                "LOW" -> "Low Blood Pressure"
+                "NORMAL" -> "Normal Blood Pressure"
+                "HIGH" -> "High Blood Pressure"
+                else -> "Unknown Status"
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        when (status) {
+                            "LOW" -> lowBloodPressureState.copy(alpha = 0.2f)
+                            "NORMAL" -> normalBloodPressureState.copy(alpha = 0.2f)
+                            "HIGH" -> highBloodPressureState.copy(alpha = 0.2f)
+                            else -> unknownBloodPressureState.copy(alpha = 0.2f)
+                        }
+                    )
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Text(
+                        text = "$statusText (Latest)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    Text(
+                        text = "${viewModel.savedSystolic}/${viewModel.savedDiastolic} mmHg",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    if (viewModel.formattedTimestamp.isNotEmpty()) {
+                        Text(
+                            text = "Measured: ${viewModel.formattedTimestamp}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "No blood pressure data saved yet.\nGo to Blood Pressure tab to record your values.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
         }
     }
 }
@@ -402,38 +537,65 @@ fun Page1(viewModel: Page1ViewModel = viewModel()) {
 
 // Second page
 class Page2ViewModel : ViewModel() {
+    data class BloodPressureReading(
+        val systolic: String,
+        val diastolic: String,
+        val timestamp: Long,
+        val formattedTime: String
+    )
+
     var systolicPressure by mutableStateOf("")
     var diastolicPressure by mutableStateOf("")
-
-    var statusMessage by mutableStateOf<String?>(null)
-
     var savedSystolic by mutableStateOf("")
     var savedDiastolic by mutableStateOf("")
     var savedTimestamp by mutableStateOf<Long?>(null)
     var formattedTimestamp by mutableStateOf("")
+    var readingsList by mutableStateOf<List<BloodPressureReading>>(listOf())
 
-    // Load saved values
-    fun loadSavedValues(sharedPreferences: SharedPreferences) {
-        systolicPressure = sharedPreferences.getString("systolic_pressure", "") ?: ""
-        diastolicPressure = sharedPreferences.getString("diastolic_pressure", "") ?: ""
-        savedTimestamp = sharedPreferences.getLong("timestamp", 0)
-
-        savedSystolic = systolicPressure
-        savedDiastolic = diastolicPressure
-
-        if (savedTimestamp != null && savedTimestamp != 0L) {
-            val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-            formattedTimestamp = sdf.format(Date(savedTimestamp!!))
-        }
-    }
-    // Save values
     fun saveValues(sharedPreferences: SharedPreferences): Boolean {
         // Basic validation
         val systolic = systolicPressure.toIntOrNull()
         val diastolic = diastolicPressure.toIntOrNull()
 
-        return if (systolic != null && diastolic != null && systolic > 0 && diastolic > 0) {
-            val currentTime = System.currentTimeMillis()  // Define the variable here
+        return if (systolic != null && diastolic != null && systolic > 0 && diastolic > 0 && systolic < 300 && diastolic < 200) {
+            val currentTime = System.currentTimeMillis()
+            val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+            val formattedTime = sdf.format(Date(currentTime))
+
+            // Create new reading
+            val newReading = BloodPressureReading(
+                systolic = systolicPressure,
+                diastolic = diastolicPressure,
+                timestamp = currentTime,
+                formattedTime = formattedTime
+            )
+
+            // Get current list and add new reading
+            val currentList = getReadingsList(sharedPreferences).toMutableList()
+            //currentList.add(newReading)
+
+            // Add previous latest reading to history if it exists
+            if (savedSystolic.isNotEmpty() && savedDiastolic.isNotEmpty() && savedTimestamp != null && savedTimestamp != 0L) {
+                val previousLatest = BloodPressureReading(
+                    systolic = savedSystolic,
+                    diastolic = savedDiastolic,
+                    timestamp = savedTimestamp!!,
+                    formattedTime = formattedTimestamp
+                )
+                currentList.add(previousLatest)
+            }
+
+            // Keep only the 3 most recent readings
+            val updatedList = currentList.sortedByDescending { it.timestamp }.take(3)
+
+            // Save updated list
+            val gson = Gson()
+            val json = gson.toJson(updatedList)
+            sharedPreferences.edit()
+                .putString("readings_list", json)
+                .apply()
+
+            // Update the most recent reading as the current saved value
             sharedPreferences.edit()
                 .putString("systolic_pressure", systolicPressure)
                 .putString("diastolic_pressure", diastolicPressure)
@@ -443,17 +605,31 @@ class Page2ViewModel : ViewModel() {
             // Update saved values
             savedSystolic = systolicPressure
             savedDiastolic = diastolicPressure
-            savedTimestamp = currentTime  // Now using the defined variable
+            savedTimestamp = currentTime
+            formattedTimestamp = formattedTime
+            readingsList = updatedList
 
-            val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-            formattedTimestamp = sdf.format(Date(currentTime))  // Using the defined variable
             true
         } else {
             false
         }
     }
 
-    fun deleteSavedValues(sharedPreferences: SharedPreferences) {
+    fun getReadingsList(sharedPreferences: SharedPreferences): List<BloodPressureReading> {
+        val json = sharedPreferences.getString("readings_list", null)
+        if (json != null) {
+            try {
+                val type = object : TypeToken<List<BloodPressureReading>>() {}.type
+                return Gson().fromJson(json, type)
+            } catch (e: Exception) {
+                // Handle parsing errors
+                e.printStackTrace()
+            }
+        }
+        return emptyList()
+    }
+
+    fun deleteLatestValue(sharedPreferences: SharedPreferences) {
         sharedPreferences.edit()
             .remove("systolic_pressure")
             .remove("diastolic_pressure")
@@ -466,15 +642,83 @@ class Page2ViewModel : ViewModel() {
         formattedTimestamp = ""
     }
 
-    fun getBloodPressureStatus(): String {
-        val systolic = savedSystolic.toIntOrNull() ?: 0
-        val diastolic = savedDiastolic.toIntOrNull() ?: 0
-        return  when {
-            systolic < 100 && diastolic < 60 -> "LOW"
-            systolic in 100..129 && diastolic in 60..84 -> "NORMAL"
-            systolic >130 && diastolic > 85 -> "HIGH"
-            else -> "UNKNOWN"
+    fun deleteReading(sharedPreferences: SharedPreferences, timestamp: Long) {
+        // Get current list
+        val currentList = getReadingsList(sharedPreferences).toMutableList()
 
+        // Remove the specific reading with matching timestamp
+        val updatedList = currentList.filter { it.timestamp != timestamp }
+
+        // Save updated list
+        val gson = Gson()
+        val json = gson.toJson(updatedList)
+        sharedPreferences.edit()
+            .putString("readings_list", json)
+            .apply()
+
+        // Update the viewModel's list
+        readingsList = updatedList
+    }
+
+    fun getBloodPressureStatus(systolic: String, diastolic: String): String {
+        val systolicValue = systolic.toIntOrNull() ?: 0
+        val diastolicValue = diastolic.toIntOrNull() ?: 0
+        return when {
+            systolicValue < 100 && diastolicValue < 60 -> "LOW"
+            systolicValue in 100..129 && diastolicValue in 60..84 -> "NORMAL"
+            systolicValue > 130 && diastolicValue > 85 -> "HIGH"
+            else -> "UNKNOWN STATUS"
+        }
+    }
+
+    fun getBloodPressureStatus(): String {
+        return getBloodPressureStatus(savedSystolic, savedDiastolic)
+    }
+
+
+    fun loadSavedValues(sharedPreferences: SharedPreferences) {
+        systolicPressure = sharedPreferences.getString("systolic_pressure", "") ?: ""
+        diastolicPressure = sharedPreferences.getString("diastolic_pressure", "") ?: ""
+        savedTimestamp = sharedPreferences.getLong("timestamp", 0)
+
+        savedSystolic = systolicPressure
+        savedDiastolic = diastolicPressure
+
+        if (savedTimestamp != null && savedTimestamp != 0L) {
+            val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+            formattedTimestamp = sdf.format(Date(savedTimestamp!!))
+        }
+
+        // Load readings list
+        readingsList = getReadingsList(sharedPreferences)
+    }
+
+    fun getAverageBloodPressure(): Pair<Int, Int> {
+        if (readingsList.isEmpty()) {
+            return Pair(0, 0)
+        }
+
+        val avgSystolic = readingsList
+            .mapNotNull { it.systolic.toIntOrNull() }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.toInt() ?: 0
+
+        val avgDiastolic = readingsList
+            .mapNotNull { it.diastolic.toIntOrNull() }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.toInt() ?: 0
+
+        return Pair(avgSystolic, avgDiastolic)
+    }
+
+    fun getAverageBloodPressureStatus(): String {
+        val (avgSystolic, avgDiastolic) = getAverageBloodPressure()
+        return if (avgSystolic > 0 && avgDiastolic > 0) {
+            getBloodPressureStatus(avgSystolic.toString(), avgDiastolic.toString())
+        } else {
+            "UNKNOWN STATUS"
         }
     }
 }
@@ -484,7 +728,7 @@ class Page2ViewModel : ViewModel() {
 fun Page2( viewModel: Page2ViewModel = viewModel()) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val sharedPreferences = context.getSharedPreferences("BloodPressureData", Context.MODE_PRIVATE)
+    val sharedPreferences = context.getSharedPreferences("MyPrefs", Context.MODE_PRIVATE)
     var showSaveMessage by remember { mutableStateOf(false) }
     var isSaveSuccessful by remember { mutableStateOf(false) }
 
@@ -567,7 +811,6 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
                 }
             }
             // Display saved values if they exist
-            // Display saved values if they exist
             if (viewModel.savedTimestamp != null && viewModel.savedTimestamp != 0L) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Column(
@@ -576,10 +819,10 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
                         .clip(RoundedCornerShape(8.dp))
                         .background(
                             when (viewModel.getBloodPressureStatus()) {
-                                "LOW" -> Color.Blue.copy(alpha = 0.2f)
-                                "NORMAL" -> Color.Green.copy(alpha = 0.2f)
-                                "HIGH" -> Color.Red.copy(alpha = 0.2f)
-                                else -> MaterialTheme.colorScheme.primaryContainer
+                                "LOW" -> lowBloodPressureState.copy(alpha = 0.2f)
+                                "NORMAL" -> normalBloodPressureState.copy(alpha = 0.2f)
+                                "HIGH" -> highBloodPressureState.copy(alpha = 0.2f)
+                                else -> unknownBloodPressureState.copy(alpha = 0.2f)
                             }
                         )
                         .padding(16.dp),
@@ -591,7 +834,7 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     Text(
-                        text = "Systoli blood pressure: ${viewModel.savedSystolic}",
+                        text = "Systolic blood pressure: ${viewModel.savedSystolic}",
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
@@ -608,10 +851,10 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
 
                     Button(
                         onClick = {
-                            viewModel.deleteSavedValues(sharedPreferences)
+                            viewModel.deleteLatestValue(sharedPreferences)
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
+                            deleteReadingButton
                         )
                     ) {
                         Text(stringResource(R.string.delete_saved_values))
@@ -620,177 +863,86 @@ fun Page2( viewModel: Page2ViewModel = viewModel()) {
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
-        }
-    }
-    /*
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        item {
-            // Input fields
-            OutlinedTextField(
-                value = viewModel.consumption,
-                onValueChange = { viewModel.consumption = it },
-                label = { Text(stringResource(R.string.energy_consumption_kwh_year)) },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = { keyboardController?.hide() }
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = viewModel.fixedPrice,
-                onValueChange = { viewModel.fixedPrice = it },
-                label = { Text(stringResource(R.string.fixed_price_cents_kwh)) },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = { keyboardController?.hide() }
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(64.dp))
-        }
-
-        item {
-            // Calculate costs
-            val consumptionValue = viewModel.consumption.toDoubleOrNull()
-            val fixedPriceValue = viewModel.fixedPrice.toDoubleOrNull()
-
-            if (consumptionValue != null && fixedPriceValue != null) {
-                viewModel.yearlyCost = consumptionValue * fixedPriceValue / 100
-                viewModel.monthlyCost = viewModel.yearlyCost!! / 12
-
-                viewModel.roundedYearlyCost = String.format("%.2f", viewModel.yearlyCost)
-                viewModel.roundedMonthlyCost = String.format("%.2f", viewModel.monthlyCost)
-            } else {
-                viewModel.yearlyCost = null
-                viewModel.monthlyCost = null
-            }
-
-            // Display calculated costs
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-                    .padding(16.dp)
-            ) {
+            if (viewModel.readingsList.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = stringResource(R.string.fixed_price_title),
-                    style = MaterialTheme.typography.titleLarge.copy(textDecoration = TextDecoration.Underline),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    text = "Blood Pressure History",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Text(
-                    text = buildAnnotatedString {
-                        if (viewModel.consumption.isEmpty() || viewModel.fixedPrice.isEmpty()) {
-                            append(stringResource(R.string.input_both_values_to_calculate))
-                        } else if (viewModel.yearlyCost == null || viewModel.monthlyCost == null) {
-                            append(stringResource(R.string.invalid_input_values))
-                        } else {
-                            append(stringResource(R.string.yearly_cost))
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("${viewModel.roundedYearlyCost} €")
-                            }
-                            append(stringResource(R.string.monthly_cost))
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("${viewModel.roundedMonthlyCost} €")
-                            }
-                        }
-                    },
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
 
-        item {
-            // Display fetched data status and average price calculation
-            if (viewModel.loading) {
-                Text(text = stringResource(R.string.loading_price_data), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            } else if (viewModel.error != null) {
-                Text(text = "Error: ${viewModel.error}", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            } else {
-                val averagePrice = viewModel.prices.map { it.price }.average()
-                val roundedAveragePrice = String.format("%.2f", averagePrice)
+                Spacer(modifier = Modifier.height(8.dp))
 
-                if (viewModel.consumption.isNotEmpty()) {
-                    viewModel.averageYearlyCost = viewModel.consumption.toDoubleOrNull()?.let { it * averagePrice / 100 }
-                    viewModel.averageMonthlyCost = viewModel.averageYearlyCost?.div(12)
-
-                    viewModel.roundedAverageYearlyCost = viewModel.averageYearlyCost?.let { String.format("%.2f", it) } ?: ""
-                    viewModel.roundedAverageMonthlyCost = viewModel.averageMonthlyCost?.let { String.format("%.2f", it) } ?: ""
-                }
-                Column(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.errorContainer)
-                        .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-                        .padding(16.dp)
+                        .height(400.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.recent_spot_price),
-                        style = MaterialTheme.typography.titleLarge.copy(textDecoration = TextDecoration.Underline),
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Text(
-                        text = buildAnnotatedString {
-                            append(stringResource(R.string.average_price_from_past_few_days))
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("$roundedAveragePrice ")
-                            }
-                            append(stringResource(R.string.cents_kwh))
-                            if (viewModel.consumption.isNotEmpty()) {
-                                append(stringResource(R.string.average_yearly_cost))
-                                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    append("${viewModel.roundedAverageYearlyCost} €")
+                    items(viewModel.readingsList) { reading ->
+                        val readingStatus = viewModel.getBloodPressureStatus(reading.systolic, reading.diastolic)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    when (readingStatus) {
+                                        "LOW" -> lowBloodPressureState.copy(alpha = 0.2f)
+                                        "NORMAL" -> normalBloodPressureState.copy(alpha = 0.2f)
+                                        "HIGH" -> highBloodPressureState.copy(alpha = 0.2f)
+                                        else -> unknownBloodPressureState.copy(alpha = 0.2f)
+                                    }
+                                )
+                                .padding(16.dp)
+                        ) {
+                            Row() {
+                                Column() {
+                                    Text(
+                                        text = "${reading.systolic}/${reading.diastolic} mmHg",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = "Measured: ${reading.formattedTime}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                 }
-                                append(stringResource(R.string.average_monthly_cost))
-                                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    append("${viewModel.roundedAverageMonthlyCost} €")
+                                Spacer(modifier = Modifier.weight(1f))
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(deleteReadingButton)
+                                        .clickable {
+                                            viewModel.deleteReading(sharedPreferences, reading.timestamp)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Delete reading",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
-                            } else {
-                                append(stringResource(R.string.input_your_consumption_to_calculate_average_costs))
                             }
-                        },
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
+                        }
+                    }
                 }
+
             }
         }
-    }*/
+    }
 }
 
-// Third page for mole check picture
+// Third page for skin camera
 @Composable
 fun Page3() {
-    val BASE_URL_EURO = "https://www.euromelanoma.eu/"
-    val EUROMELANOMA_LOCATION =
+    val baseUrlEuro = "https://www.euromelanoma.eu/"
+    val euromelanomaLocalization =
         stringResource(R.string.en_intl_learn_about_skin_cancer_benign_lesion)
 
-    var errorMessage by remember { mutableStateOf("") }
+    val errorMessage by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("MyPrefs", Context.MODE_PRIVATE)
     val cameraPermissionGranted = remember {
@@ -809,15 +961,6 @@ fun Page3() {
             imageUriTemp?.let { uri ->
                 imageUri = uri
                 sharedPreferences.edit().putString("image_uri", uri.toString()).apply()
-                /*
-                // Reload image after taking picture
-                loadImage(uri, context, onBitmapLoaded = { loadedBitmap ->
-                    bitmap = loadedBitmap
-                    errorMessage = ""
-                }, onError = { error ->
-                    errorMessage = error
-                    bitmap = null
-                })*/
             }
         }
           imageUriTemp = null // Reset the imageUri state
@@ -842,7 +985,6 @@ fun Page3() {
         }
     }
 
-
     // Save imageUri to SharedPreferences when updated
     LaunchedEffect(imageUri) {
         imageUri?.let { uri ->
@@ -865,12 +1007,12 @@ fun Page3() {
                         val exif = ExifInterface(inputStream)
                         val dateTime = exif.getAttribute(ExifInterface.TAG_DATETIME)
 
+                        // Convert date format
                         dateTime?.let {
-                            // Alkuperäinen EXIF-muoto: yyyy:MM:dd HH:mm:ss
+
                             val inputFormat = SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.getDefault())
                             val date = inputFormat.parse(it)
 
-                            // Muunnetaan muotoon dd.MM.yyyy
                             val outputFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
                             return date?.let { outputFormat.format(it) } ?: "No photo taken"
                         } ?: context.getString(R.string.no_photo_taken)
@@ -881,8 +1023,7 @@ fun Page3() {
                 }
             }
 
-
-            // Display image if bitmap is available
+            // Show the image if it exists
             imageUri?.let {uri ->
                 val bitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
 
@@ -937,7 +1078,7 @@ fun Page3() {
 
             Button(
                 onClick = {
-                    val intentBrowserDataJSON = Intent(Intent.ACTION_VIEW, Uri.parse(BASE_URL_EURO + EUROMELANOMA_LOCATION))
+                    val intentBrowserDataJSON = Intent(Intent.ACTION_VIEW, Uri.parse(baseUrlEuro + euromelanomaLocalization))
                     context.startActivity(intentBrowserDataJSON)
                 },
                 colors = ButtonDefaults.buttonColors(
@@ -953,9 +1094,6 @@ fun Page3() {
 
     }
 }
-
-
-
 
 // Fourth page for adding user name
 @Composable

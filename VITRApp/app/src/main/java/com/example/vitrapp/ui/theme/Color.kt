@@ -217,9 +217,8 @@ val surfaceContainerDarkHighContrast = Color(0xFF201F1F)
 val surfaceContainerHighDarkHighContrast = Color(0xFF2B2A29)
 val surfaceContainerHighestDarkHighContrast = Color(0xFF353533)
 
-
-
-
-
-
-
+val unknownBloodPressureState = Color.Gray
+val normalBloodPressureState = Color(0xFF4CAF50)
+val highBloodPressureState = Color(0xFFF44336)
+val lowBloodPressureState = Color(0xFF0078D5)
+val deleteReadingButton = Color(0xB3005598)
